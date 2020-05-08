@@ -26,8 +26,9 @@ import (
 	"github.com/buildpacks/libcnb"
 	. "github.com/onsi/gomega"
 	"github.com/paketo-buildpacks/libbs"
-	"github.com/paketo-buildpacks/maven/maven"
 	"github.com/sclevine/spec"
+
+	"github.com/paketo-buildpacks/maven/maven"
 )
 
 func testBuild(t *testing.T, context spec.G, it spec.S) {
@@ -87,13 +88,18 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 		Expect(result.Layers[2].(libbs.Application).Command).To(Equal(filepath.Join(ctx.Layers.Path, "maven", "bin", "mvn")))
 	})
 
-	context("BP_MAVEN_SETTINGS", func() {
+	context("maven settings bindings exists", func() {
 		it.Before(func() {
-			Expect(os.Setenv("BP_MAVEN_SETTINGS", "test-value")).To(Succeed())
-		})
-
-		it.After(func() {
-			Expect(os.Unsetenv("BP_MAVEN_SETTINGS")).To(Succeed())
+			ctx.Platform.Path = "some-platform"
+			ctx.Platform.Bindings = libcnb.Bindings{libcnb.Binding{
+				Name: "some-maven",
+				Metadata: map[string]string{
+					"kind": "maven",
+				},
+				Secret: map[string]string{
+					"settings.xml": "",
+				},
+			}}
 		})
 
 		it("contributes settings.xml", func() {
@@ -103,15 +109,13 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 			result, err := maven.Build{}.Build(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(result.Layers).To(HaveLen(3))
-			Expect(result.Layers[1].Name()).To(Equal("settings"))
-			Expect(result.Layers[2].(libbs.Application).ArgumentResolver.DefaultArguments).To(Equal([]string{
-				fmt.Sprintf("--settings=%s", filepath.Join(ctx.Layers.Path, "settings", "settings.xml")),
+			Expect(result.Layers).To(HaveLen(2))
+			Expect(result.Layers[1].(libbs.Application).ArgumentResolver.DefaultArguments).To(Equal([]string{
+				fmt.Sprintf("--settings=%s", filepath.Join("some-platform", "bindings", "some-maven", "secret", "settings.xml")),
 				"-Dmaven.test.skip=true",
 				"package",
 			}))
 
 		})
 	})
-
 }

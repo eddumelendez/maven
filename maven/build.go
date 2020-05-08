@@ -34,7 +34,6 @@ type Build struct {
 
 func (b Build) Build(context libcnb.BuildContext) (libcnb.BuildResult, error) {
 	b.Logger.Title(context.Buildpack)
-	b.Logger.Body(bard.FormatUserConfig("BP_MAVEN_SETTINGS", "the contents of a settings.xml file", "<none>"))
 
 	result := libcnb.NewBuildResult()
 
@@ -72,11 +71,20 @@ func (b Build) Build(context libcnb.BuildContext) (libcnb.BuildResult, error) {
 	result.Layers = append(result.Layers, c)
 
 	var args []string
-	if t, ok := os.LookupEnv("BP_MAVEN_SETTINGS"); ok {
-		s := NewSettings(t, context.Layers.Path)
-		s.Logger = b.Logger
-		result.Layers = append(result.Layers, s)
-		args = append(args, fmt.Sprintf("--settings=%s", s.Path))
+	for _, binding := range context.Platform.Bindings {
+		if binding.Metadata == nil || binding.Metadata["kind"] != "maven" {
+			continue
+		}
+		if binding.Secret == nil {
+			// TODO: warn
+			continue
+		}
+		if _, ok := binding.Secret["settings.xml"]; !ok {
+			// TODO: warn
+			continue
+		}
+		settingsPath := filepath.Join(context.Platform.Path, "bindings", binding.Name, "secret", "settings.xml")
+		args = append(args, fmt.Sprintf("--settings=%s", settingsPath))
 	}
 	args = append(args, "-Dmaven.test.skip=true", "package")
 
